@@ -1,0 +1,13 @@
+server:
+  port: 8081
+spring:
+  datasource:
+    url: ${DB_ADDRESS:jdbc:postgresql://localhost:5432/homework_61}
+    username: app
+    password: nopasswd
+    driver-class: org.postgresql.Driver
+  servlet:
+    multipart:
+      file-size-threshold: 0
+      max-file-size: 512GB
+files_directory: /storage

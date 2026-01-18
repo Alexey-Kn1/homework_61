@@ -1,0 +1,48 @@
+plugins {
+    id 'java'
+
+    id 'war'
+    id 'org.springframework.boot' version '3.5.9'
+//    id 'org.springframework.boot' version '4.0.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'ru.netology'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+//    Spring 3:
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+
+//    Spring 4:
+//    implementation 'org.springframework.boot:spring-boot-starter-web'
+//    providedRuntime 'org.springframework.boot:spring-boot-starter-tomcat-runtime'
+//    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+//    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+//    testImplementation 'org.springframework.boot:spring-boot-resttestclient'
+//    testImplementation 'org.reactivestreams:reactive-streams' // MultipartBodyBuilder
+
+    implementation 'org.postgresql:postgresql'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    implementation 'org.springframework.security:spring-security-crypto' // BCryptPasswordEncoder
+
+    implementation 'org.apache.commons:commons-lang3' // RandomStringUtils
+
+    implementation 'commons-io:commons-io:2.21.0' // FilenameUtils
+}
+
+test {
+    useJUnitPlatform()
+}
