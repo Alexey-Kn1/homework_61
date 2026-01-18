@@ -2,7 +2,7 @@ server:
   port: 8081
 spring:
   datasource:
-    url: ${DB_ADDRESS:jdbc:postgresql://localhost:5432/homework_61}
+    url: ${DB_ADDRESS:jdbc:postgresql://postgres:5432/homework_61}
     username: app
     password: nopasswd
     driver-class: org.postgresql.Driver
