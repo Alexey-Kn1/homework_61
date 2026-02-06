@@ -50,13 +50,9 @@ public class CloudServiceService {
             throw new UserAlreadyExistsException(login);
         }
 
-        var userId = repository.addUser(
+        repository.addUser(
                 new User(0, login, passwordEncoder.encode(password))
         );
-
-        var token = generateAccessToken(login, password);
-
-        repository.saveUserSession(token, userId);
     }
 
     // Returns access token.
