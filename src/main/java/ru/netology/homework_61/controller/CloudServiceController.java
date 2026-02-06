@@ -18,7 +18,7 @@ public class CloudServiceController {
         this.service = service;
     }
 
-//    // It is convenient for resting to add new users via API because of passwords hashing.
+//    // It is convenient for testing to add new users via API because of passwords hashing.
 //    @PostMapping("/registration")
 //    public ResponseEntity<Object> registration(@RequestBody UserCredentials credentials) {
 //        return service.registerNewUser(credentials);
