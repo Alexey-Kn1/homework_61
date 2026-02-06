@@ -9,6 +9,7 @@ import ru.netology.homework_61.service.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
 @Controller
 @RequestMapping
@@ -100,7 +101,11 @@ public class CloudServiceController {
     }
 
     @GetMapping("/list")
-    public ResponseEntity<Object> getAllFiles(@RequestHeader("auth-token") String authToken, @RequestParam("limit") int limit) throws CloudServiceException {
+    public ResponseEntity<List<FilesListResponseElement>> getAllFiles(
+            @RequestHeader("auth-token") String authToken,
+            @RequestParam("limit") int limit
+    ) throws CloudServiceException {
+
         var filesData = service.getAllFiles(authToken, limit);
 
         var res = new ArrayList<FilesListResponseElement>(filesData.size());
