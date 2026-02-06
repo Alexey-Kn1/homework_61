@@ -4,6 +4,7 @@ import jakarta.transaction.Transactional;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.core.env.Environment;
+import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,13 +18,14 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 
@@ -41,60 +43,50 @@ public class CloudServiceService {
         passwordEncoder = encoder;
     }
 
+    // Creates a user, returns access token.
     @Transactional
-    public ResponseEntity<Object> registerNewUser(UserCredentials credentials) {
-        if (repository.findUserByLogin(credentials.getLogin()).isPresent()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("User with login '%s' already exists", credentials.getLogin())),
-                    HttpStatus.BAD_REQUEST
-            );
+    public void registerNewUser(String login, String password) throws UserAlreadyExistsException {
+        if (repository.findUserByLogin(login).isPresent()) {
+            throw new UserAlreadyExistsException(login);
         }
 
         var userId = repository.addUser(
-                new User(0, credentials.getLogin(), passwordEncoder.encode(credentials.getPassword()))
+                new User(0, login, passwordEncoder.encode(password))
         );
 
-        var token = generateAccessToken(credentials);
+        var token = generateAccessToken(login, password);
 
         repository.saveUserSession(token, userId);
-
-        return new ResponseEntity<>(
-                new SuccessfulLoginResponse(token),
-                HttpStatus.OK
-        );
     }
 
-    public ResponseEntity<Object> login(UserCredentials credentials) {
-        var user = repository.findUserByLogin(credentials.getLogin());
+    // Returns access token.
+    public String login(String login, String password) throws UserNotFoundException, PasswordMismatchException {
+        var user = repository.findUserByLogin(login);
 
-        if (user.isEmpty() || !passwordEncoder.matches(credentials.getPassword(), user.get().getPasswordHash())) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        if (user.isEmpty()) {
+            throw new UserNotFoundException(login);
         }
 
-        var token = generateAccessToken(credentials);
+        if (!passwordEncoder.matches(password, user.get().getPasswordHash())) {
+            throw new PasswordMismatchException();
+        }
+
+        var token = generateAccessToken(login, password);
 
         repository.saveUserSession(token, user.get().getId());
 
-        return new ResponseEntity<>(
-                new SuccessfulLoginResponse(token),
-                HttpStatus.OK
-        );
+        return token;
     }
 
-    public ResponseEntity<Object> logout(String authToken) {
+    public void logout(String authToken) {
         repository.deleteUserSession(authToken);
-
-        return new ResponseEntity<>(HttpStatus.OK);
     }
 
-    public ResponseEntity<Object> uploadFile(String authToken, String fileName, MultipartFile file) throws IOException {
+    public void uploadFile(String authToken, String fileName, MultipartFile file) throws IOException, AuthorizationException {
         var user = findUserIdByAccessToken(authToken);
 
         if (user.isEmpty()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
-            );
+            throw new AuthorizationException();
         }
 
         var existingFileDataFromDB = repository.getFileData(user.get().getId(), fileName);
@@ -139,87 +131,59 @@ public class CloudServiceService {
 
             throw e;
         }
-
-        return new ResponseEntity<>(HttpStatus.OK);
     }
 
-    public ResponseEntity<Object> deleteFile(String authToken, String fileName) throws IOException {
+    public void deleteFile(String authToken, String fileName) throws IOException, AuthorizationException, FileNotFoundException {
         var user = findUserIdByAccessToken(authToken);
 
         if (user.isEmpty()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
-            );
+            throw new AuthorizationException();
         }
 
         var fileData = repository.getFileData(user.get().getId(), fileName);
 
         if (fileData.isEmpty()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("File '%s' does not exist", fileName)),
-                    HttpStatus.BAD_REQUEST
-            );
+            throw new FileNotFoundException(fileName);
         }
 
         if (repository.deleteFileData(user.get().getId(), fileName)) {
             Files.delete(Path.of(filesDir, fileData.get().getLocalName()));
-
-            return new ResponseEntity<>(HttpStatus.OK);
         } else {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("file '%s' not found", fileName)),
-                    HttpStatus.INTERNAL_SERVER_ERROR
-            );
+            // File was deleted by other request (erasing file in transaction is too slow).
+            throw new FileNotFoundException(fileName);
         }
     }
 
-    public ResponseEntity<Object> downloadFile(String authToken, String fileName) throws Exception {
+    public UrlResource downloadFile(String authToken, String fileName) throws AuthorizationException, FileNotFoundException {
         var user = findUserIdByAccessToken(authToken);
 
         if (user.isEmpty()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
-            );
+            throw new AuthorizationException();
         }
 
         var fileDataFromDb = repository.getFileData(user.get().getId(), fileName);
 
         if (fileDataFromDb.isEmpty()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("File '%s' does not exist", fileName)),
-                    HttpStatus.BAD_REQUEST
-            );
+            throw new FileNotFoundException(fileName);
         }
 
         var fileData = fileDataFromDb.get();
 
         var filePath = Path.of(filesDir, fileData.getLocalName());
 
-//        var responseBody = new LinkedMultiValueMap<>();
-//        responseBody.add("hash", fileData.getChecksum());
-//        responseBody.add("file", new UrlResourceWithCustomFileName(filePath.toFile().toURI(), fileData.getName())); // Doesn't work (breaks files).
-//        responseBody.add("file", Base64.getEncoder().encodeToString(Files.readAllBytes(filePath))); // Doesn't work also.
-
-        // Works perfectly even without header CONTENT_TYPE setup, but it breaks API documentation.
-        // https://github.com/netology-code/jd-homeworks/blob/cc050f58f553c82c5311d10b6df8e181eb3624c3/diploma/CloudServiceSpecification.yaml#L261C1-L261C10
-        var responseBody = new UrlResourceWithSpecifiedFilename(filePath.toFile().toURI(), fileData.getName());
-
-        return ResponseEntity.ok()
-//                .header(HttpHeaders.CONTENT_TYPE, MediaType.MULTIPART_FORM_DATA_VALUE)
-                .body(responseBody);
+        try {
+            return new UrlResourceWithSpecifiedFilename(filePath.toFile().toURI(), fileData.getName());
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Transactional
-    public ResponseEntity<Object> renameFile(String authToken, String fileName, String newFileName) throws IOException {
+    public void renameFile(String authToken, String fileName, String newFileName) throws AuthorizationException, FileNotFoundException, FileAlreadyExistsException {
         var userFromDb = findUserIdByAccessToken(authToken);
 
         if (userFromDb.isEmpty()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
-            );
+            throw new AuthorizationException();
         }
 
         var user = userFromDb.get();
@@ -227,19 +191,13 @@ public class CloudServiceService {
         var fileDataFromDBByNewName = repository.getFileData(user.getId(), newFileName);
 
         if (fileDataFromDBByNewName.isPresent()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("File '%s' already exists", fileName)),
-                    HttpStatus.BAD_REQUEST
-            );
+            throw new FileAlreadyExistsException(fileName);
         }
 
         var fileDataFromDB = repository.getFileData(user.getId(), fileName);
 
         if (fileDataFromDB.isEmpty()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("File '%s' does not exist", fileName)),
-                    HttpStatus.BAD_REQUEST
-            );
+            throw new FileNotFoundException(fileName);
         }
 
         var fileData = fileDataFromDB.get();
@@ -247,34 +205,16 @@ public class CloudServiceService {
         fileData.setName(newFileName);
 
         repository.saveFileData(fileData);
-
-        return new ResponseEntity<>(HttpStatus.OK);
     }
 
-    public ResponseEntity<Object> getAllFiles(String authToken, int limit) {
+    public List<FileData> getAllFiles(String authToken, int limit) throws AuthorizationException {
         var user = findUserIdByAccessToken(authToken);
 
         if (user.isEmpty()) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
-            );
+            throw new AuthorizationException();
         }
 
-        var list = repository.listFilesByUser(user.get().getId(), limit);
-
-        var res = new ArrayList<FilesListResponseElement>(list.size());
-
-        for (var element : list) {
-            res.add(
-                    new FilesListResponseElement(
-                            element.getName(),
-                            element.getSize()
-                    )
-            );
-        }
-
-        return new ResponseEntity<>(res, HttpStatus.OK);
+        return repository.listFilesByUser(user.get().getId(), limit);
     }
 
     private Optional<User> findUserIdByAccessToken(String authToken) {
@@ -326,7 +266,7 @@ public class CloudServiceService {
         return extension == null || extension.isEmpty() ? name : name + "." + extension;
     }
 
-    private String generateAccessToken(UserCredentials userCredentials) {
+    private String generateAccessToken(String login, String password) {
         return RandomStringUtils.random(100, 0, 0, true, true, null, rand);
     }
 }

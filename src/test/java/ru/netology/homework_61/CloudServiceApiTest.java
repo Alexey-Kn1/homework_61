@@ -18,9 +18,9 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import ru.netology.homework_61.controller.FileRenameRequestBody;
 import ru.netology.homework_61.model.User;
 import ru.netology.homework_61.repository.CloudServiceRepository;
-import ru.netology.homework_61.service.FilesListResponseElement;
-import ru.netology.homework_61.service.SuccessfulLoginResponse;
-import ru.netology.homework_61.service.UserCredentials;
+import ru.netology.homework_61.controller.FilesListResponseElement;
+import ru.netology.homework_61.controller.SuccessfulLoginResponse;
+import ru.netology.homework_61.controller.UserCredentials;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

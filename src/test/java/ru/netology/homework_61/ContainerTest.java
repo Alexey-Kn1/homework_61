@@ -14,8 +14,8 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import ru.netology.homework_61.service.SuccessfulLoginResponse;
-import ru.netology.homework_61.service.UserCredentials;
+import ru.netology.homework_61.controller.SuccessfulLoginResponse;
+import ru.netology.homework_61.controller.UserCredentials;
 
 // Doesn't work yet: application can't connect database.
 
