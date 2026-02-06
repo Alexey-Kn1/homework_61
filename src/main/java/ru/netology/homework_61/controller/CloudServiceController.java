@@ -57,56 +57,34 @@ public class CloudServiceController {
             @RequestHeader("auth-token") String authToken,
             @RequestParam("filename") String fileName,
             @RequestPart("file") MultipartFile file
-    ) throws IOException {
-        try {
-            service.uploadFile(authToken, fileName, file);
+    ) throws IOException, CloudServiceException {
 
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (AuthorizationException e) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
-            );
-        }
+        service.uploadFile(authToken, fileName, file);
+
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @DeleteMapping("/file")
-    public ResponseEntity<Object> deleteFile(@RequestHeader("auth-token") String authToken, @RequestParam("filename") String fileName) throws IOException {
-        try {
-            service.deleteFile(authToken, fileName);
+    public ResponseEntity<Object> deleteFile(
+            @RequestHeader("auth-token") String authToken,
+            @RequestParam("filename") String fileName
+    ) throws IOException, CloudServiceException {
 
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (FileNotFoundException e) {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("File '%s' does not exist", e.getFileName())),
-                    HttpStatus.BAD_REQUEST
-            );
-        } catch (AuthorizationException e) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
-            );
-        }
+        service.deleteFile(authToken, fileName);
+
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @GetMapping("/file")
-    public ResponseEntity<Object> downloadFile(@RequestHeader("auth-token") String authToken, @RequestParam("filename") String fileName) throws Exception {
-        try {
-            var file = service.downloadFile(authToken, fileName);
+    public ResponseEntity<Object> downloadFile(
+            @RequestHeader("auth-token") String authToken,
+            @RequestParam("filename") String fileName
+    ) throws CloudServiceException {
 
-            return ResponseEntity.ok()
-                    .body(file);
-        } catch (AuthorizationException e) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
-            );
-        } catch (FileNotFoundException e) {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("File '%s' does not exist", e.getFileName())),
-                    HttpStatus.BAD_REQUEST
-            );
-        }
+        var file = service.downloadFile(authToken, fileName);
+
+        return ResponseEntity.ok()
+                .body(file);
     }
 
     @PutMapping("/file")
@@ -114,51 +92,52 @@ public class CloudServiceController {
             @RequestHeader("auth-token") String authToken,
             @RequestParam("filename") String fileName,
             @RequestBody FileRenameRequestBody body
-    ) {
-        try {
-            service.renameFile(authToken, fileName, body.getNewName());
-        } catch (AuthorizationException e) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
-            );
-        } catch (FileNotFoundException e) {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("File '%s' does not exist", e.getFileName())),
-                    HttpStatus.BAD_REQUEST
-            );
-        } catch (FileAlreadyExistsException e) {
-            return new ResponseEntity<>(
-                    new ErrorResponse(String.format("File '%s' already exists", e.getFileName())),
-                    HttpStatus.BAD_REQUEST
-            );
-        }
+    ) throws CloudServiceException {
+
+        service.renameFile(authToken, fileName, body.getNewName());
 
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @GetMapping("/list")
-    public ResponseEntity<Object> getAllFiles(@RequestHeader("auth-token") String authToken, @RequestParam("limit") int limit) {
-        try {
-            var filesData = service.getAllFiles(authToken, limit);
+    public ResponseEntity<Object> getAllFiles(@RequestHeader("auth-token") String authToken, @RequestParam("limit") int limit) throws CloudServiceException {
+        var filesData = service.getAllFiles(authToken, limit);
 
-            var res = new ArrayList<FilesListResponseElement>(filesData.size());
+        var res = new ArrayList<FilesListResponseElement>(filesData.size());
 
-            for (var element : filesData) {
-                res.add(
-                        new FilesListResponseElement(
-                                element.getName(),
-                                element.getSize()
-                        )
-                );
-            }
-
-            return new ResponseEntity<>(res, HttpStatus.OK);
-        } catch (AuthorizationException e) {
-            return new ResponseEntity<>(
-                    new ErrorResponse("Unauthorized"),
-                    HttpStatus.UNAUTHORIZED
+        for (var element : filesData) {
+            res.add(
+                    new FilesListResponseElement(
+                            element.getName(),
+                            element.getSize()
+                    )
             );
         }
+
+        return new ResponseEntity<>(res, HttpStatus.OK);
+    }
+
+    @ExceptionHandler(AuthorizationException.class)
+    public ResponseEntity<ErrorResponse> respondWithUnauthorized(AuthorizationException e) {
+        return new ResponseEntity<>(
+                new ErrorResponse("Unauthorized"),
+                HttpStatus.UNAUTHORIZED
+        );
+    }
+
+    @ExceptionHandler(FileAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> fileAlreadyExists(FileAlreadyExistsException e) {
+        return new ResponseEntity<>(
+                new ErrorResponse(String.format("File '%s' already exists", e.getFileName())),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    @ExceptionHandler(FileNotFoundException.class)
+    public ResponseEntity<ErrorResponse> fileNotFound(FileNotFoundException e) {
+        return new ResponseEntity<>(
+                new ErrorResponse(String.format("File '%s' does not exist", e.getFileName())),
+                HttpStatus.BAD_REQUEST
+        );
     }
 }
