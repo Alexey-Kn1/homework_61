@@ -14,17 +14,19 @@ import java.util.List;
 @Controller
 @RequestMapping
 public class CloudServiceController {
-    private final CloudServiceService service;
+    private final FilesService filesService;
+    private final UserManagementService umService;
 
-    public CloudServiceController(CloudServiceService service) {
-        this.service = service;
+    public CloudServiceController(FilesService filesService, UserManagementService umService) {
+        this.filesService = filesService;
+        this.umService = umService;
     }
 
     // It is convenient for testing to add new users via API because of passwords hashing.
     @PostMapping("/registration")
     public ResponseEntity<Object> registration(@RequestBody UserCredentials credentials) {
         try {
-            service.registerNewUser(credentials.getLogin(), credentials.getPassword());
+            umService.registerNewUser(credentials.getLogin(), credentials.getPassword());
 
             return new ResponseEntity<>(HttpStatus.OK);
         } catch (UserAlreadyExistsException e) {
@@ -35,7 +37,7 @@ public class CloudServiceController {
     @PostMapping("/login")
     public ResponseEntity<SuccessfulLoginResponse> login(@RequestBody UserCredentials credentials) {
         try {
-            var token = service.login(credentials.getLogin(), credentials.getPassword());
+            var token = umService.login(credentials.getLogin(), credentials.getPassword());
 
             return new ResponseEntity<>(
                     new SuccessfulLoginResponse(token),
@@ -48,7 +50,7 @@ public class CloudServiceController {
 
     @PostMapping("/logout")
     public ResponseEntity<Object> logout(@RequestHeader("auth-token") String authToken) {
-        service.logout(authToken);
+        umService.logout(authToken);
 
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -60,7 +62,7 @@ public class CloudServiceController {
             @RequestPart("file") MultipartFile file
     ) throws IOException, CloudServiceException {
 
-        service.uploadFile(authToken, fileName, file);
+        filesService.uploadFile(authToken, fileName, file);
 
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -71,7 +73,7 @@ public class CloudServiceController {
             @RequestParam("filename") String fileName
     ) throws IOException, CloudServiceException {
 
-        service.deleteFile(authToken, fileName);
+        filesService.deleteFile(authToken, fileName);
 
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -82,7 +84,7 @@ public class CloudServiceController {
             @RequestParam("filename") String fileName
     ) throws CloudServiceException {
 
-        var file = service.downloadFile(authToken, fileName);
+        var file = filesService.downloadFile(authToken, fileName);
 
         return ResponseEntity.ok()
                 .body(file);
@@ -95,7 +97,7 @@ public class CloudServiceController {
             @RequestBody FileRenameRequestBody body
     ) throws CloudServiceException {
 
-        service.renameFile(authToken, fileName, body.getNewName());
+        filesService.renameFile(authToken, fileName, body.getNewName());
 
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -106,7 +108,7 @@ public class CloudServiceController {
             @RequestParam("limit") int limit
     ) throws CloudServiceException {
 
-        var filesData = service.getAllFiles(authToken, limit);
+        var filesData = filesService.getAllFiles(authToken, limit);
 
         var res = new ArrayList<FilesListResponseElement>(filesData.size());
 

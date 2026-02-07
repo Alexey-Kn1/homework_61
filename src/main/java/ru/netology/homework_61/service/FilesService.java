@@ -5,7 +5,6 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.UrlResource;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import ru.netology.homework_61.model.FileData;
@@ -22,58 +21,20 @@ import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 
 @Service
-public class CloudServiceService {
+public class FilesService {
     private final CloudServiceRepository repository;
     private final String filesDir;
     private final Random rand;
-    private final PasswordEncoder passwordEncoder;
 
-    public CloudServiceService(CloudServiceRepository repository, Environment env, PasswordEncoder encoder) {
+    public FilesService(CloudServiceRepository repository, Environment env) {
         this.repository = repository;
         filesDir = env.getProperty("files_directory", ".");
-        rand = new SecureRandom();
-        passwordEncoder = encoder;
-    }
-
-    // Creates a user, returns access token.
-    @Transactional
-    public void registerNewUser(String login, String password) throws UserAlreadyExistsException {
-        if (repository.findUserByLogin(login).isPresent()) {
-            throw new UserAlreadyExistsException(login);
-        }
-
-        repository.addUser(
-                new User(0, login, passwordEncoder.encode(password))
-        );
-    }
-
-    // Returns access token.
-    public String login(String login, String password) throws UserNotFoundException, PasswordMismatchException {
-        var user = repository.findUserByLogin(login);
-
-        if (user.isEmpty()) {
-            throw new UserNotFoundException(login);
-        }
-
-        if (!passwordEncoder.matches(password, user.get().getPasswordHash())) {
-            throw new PasswordMismatchException();
-        }
-
-        var token = generateAccessToken(login, password);
-
-        repository.saveUserSession(token, user.get().getId());
-
-        return token;
-    }
-
-    public void logout(String authToken) {
-        repository.deleteUserSession(authToken);
+        rand = new Random();
     }
 
     public void uploadFile(String authToken, String fileName, MultipartFile file) throws IOException, AuthorizationException {
@@ -258,9 +219,5 @@ public class CloudServiceService {
         var name = RandomStringUtils.random(100, 0, 0, true, true, null, rand);
 
         return extension == null || extension.isEmpty() ? name : name + "." + extension;
-    }
-
-    private String generateAccessToken(String login, String password) {
-        return RandomStringUtils.random(100, 0, 0, true, true, null, rand);
     }
 }
