@@ -1,82 +1,195 @@
 package ru.netology.homework_61;
 
+import org.junit.ClassRule;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
+import org.springframework.boot.test.util.TestPropertyValues;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.Network;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockPart;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.testcontainers.shaded.org.apache.commons.io.FileUtils;
+import ru.netology.homework_61.controller.FileRenameRequestBody;
+import ru.netology.homework_61.controller.FilesListResponseElement;
 import ru.netology.homework_61.controller.SuccessfulLoginResponse;
 import ru.netology.homework_61.controller.UserCredentials;
 
-// Doesn't work yet: application can't connect database.
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT, classes = Main.class)
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@ContextConfiguration(initializers = {ContainerTest.Initializer.class})
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
 public class ContainerTest {
-    private static final String TEST_USER_LOGIN = "testuser";
-    private static final String TEST_USER_PASSWORD = "passphrase";
+    private static final String FILES_STORAGE_DIR_PATH = Path.of(".", "src", "test", "resources", "files").toString();
+    private static final Path DATA_DIR_PATH = Path.of(".", "src", "test", "resources");
+    private static final String FILE_NAME = "fish.JPG";
+    private static final String CHANGED_FILE_NAME = "sea.JPG";
+
+    private static final Path EXAMPLE_FILE_PATH = Path.of(DATA_DIR_PATH.toString(), FILE_NAME);
+
+    @ClassRule
+    public static final PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:latest")
+            .withDatabaseName("homework_61")
+            .withUsername("app")
+            .withPassword("nopasswd");
+
+    private final MockMvc api;
+    private final ObjectMapper serializer;
 
     @Autowired
-    private TestRestTemplate restTemplate;
-
-    private static final Network network = Network.newNetwork();
-
-    @Container
-    private static GenericContainer<?> postgres = new GenericContainer<>("postgres:latest")
-            .withNetwork(network)
-            .withNetworkAliases("postgres")
-            .withFileSystemBind("./data/postgres", "/var/lib/postgresql")
-            .withExposedPorts(5432);
-
-    @Container
-    private static GenericContainer<?> appContainer = new GenericContainer<>("app")
-            .dependsOn(postgres)
-            .withNetwork(network)
-            .withExposedPorts(8081);
+    public ContainerTest(MockMvc api, ObjectMapper serializer) {
+        this.api = api;
+        this.serializer = serializer;
+    }
 
     @BeforeAll
-    public static void startContainer() throws Exception {
-        postgres.start();
-        appContainer.addEnv("DB_ADDRESS", "jdbc:postgresql://postgres:" + postgres.getMappedPort(5432) + "/homework_61");
-        appContainer.start();
+    public static void startContainer() {
+        postgreSQLContainer.start();
     }
 
     @Test
-    public void checkApi() {
-        var addr = "http://" + appContainer.getHost() + ":" + appContainer.getMappedPort(8081);
+    public void apiTest() throws Exception {
+        api.perform(
+                        post("/registration")
+                                .content(
+                                        serializer.writeValueAsString(
+                                                new UserCredentials("user", "passphrase")
+                                        )
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isOk());
 
-        var loginResponse = restTemplate.postForEntity(
-                addr + "/login",
-                new UserCredentials(TEST_USER_LOGIN, TEST_USER_PASSWORD),
-                SuccessfulLoginResponse.class
-        );
+        var content = api.perform(
+                        post("/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        serializer.writeValueAsString(
+                                                new UserCredentials("user", "passphrase")
+                                        )
+                                )
+                )
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
 
-        Assertions.assertEquals(HttpStatus.OK, loginResponse.getStatusCode());
+        var accessToken = serializer.readValue(content, SuccessfulLoginResponse.class).getAuthToken();
 
-        var accessToken = loginResponse.getBody().getAuthToken();
+        var fileName = EXAMPLE_FILE_PATH.getFileName().toString();
+        long fileSize;
 
-        // TODO: check API.
+        {
+            var fileData = Files.readAllBytes(EXAMPLE_FILE_PATH);
 
-        var headers = new HttpHeaders();
+            fileSize = fileData.length;
 
-        headers.add("auth-token", accessToken);
+            api.perform(
+                            multipart(HttpMethod.POST, "/file")
+                                    .part(
+                                            new MockPart("file", fileName, fileData)
+                                    )
+                                    .header("auth-token", accessToken)
+                                    .param("filename", fileName)
+                    )
+                    .andExpect(status().isOk());
+        }
 
-        var logoutResponse = restTemplate.exchange(
-                addr + "/logout",
-                HttpMethod.POST,
-                new HttpEntity<>(headers),
-                String.class
-        );
+        api.perform(
+                        put("/file")
+                                .header("auth-token", accessToken)
+                                .param("filename", fileName)
+                                .content(
+                                        serializer.writeValueAsString(
+                                                new FileRenameRequestBody(CHANGED_FILE_NAME)
+                                        )
+                                )
+                                .contentType(MediaType.APPLICATION_JSON)
+                )
+                .andExpect(status().isOk());
 
-        Assertions.assertEquals(HttpStatus.OK, logoutResponse.getStatusCode());
+        var responseBody = api.perform(
+                        get("/list")
+                                .header("auth-token", accessToken)
+                                .param("filename", CHANGED_FILE_NAME)
+                                .param("limit", "999")
+                )
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        var list = serializer.readValue(responseBody, FilesListResponseElement[].class);
+
+        Assertions.assertTrue(list.length > 0);
+
+        var found = false;
+
+        for (var element : list) {
+            if (CHANGED_FILE_NAME.equals(element.getName())) {
+                found = true;
+
+                Assertions.assertEquals(CHANGED_FILE_NAME, element.getName());
+
+                Assertions.assertEquals(fileSize, element.getSize());
+
+                break;
+            }
+        }
+
+        Assertions.assertTrue(found);
+
+        api.perform(
+                        get("/file")
+                                .header("auth-token", accessToken)
+                                .param("filename", CHANGED_FILE_NAME)
+                )
+                .andExpect(status().isOk());
+
+        api.perform(
+                        delete("/file")
+                                .header("auth-token", accessToken)
+                                .param("filename", CHANGED_FILE_NAME)
+                )
+                .andExpect(status().isOk());
+
+        api.perform(
+                        post("/logout")
+                                .header("auth-token", accessToken)
+                )
+                .andExpect(status().isOk());
+    }
+
+    @BeforeAll
+    @AfterAll
+    public static void cleanFiles() throws Exception {
+        FileUtils.cleanDirectory(new File(FILES_STORAGE_DIR_PATH));
+    }
+
+    static class Initializer
+            implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+        public void initialize(ConfigurableApplicationContext configurableApplicationContext) {
+            TestPropertyValues.of(
+                    "spring.datasource.url=" + postgreSQLContainer.getJdbcUrl(),
+                    "spring.datasource.username=" + postgreSQLContainer.getUsername(),
+                    "spring.datasource.password=" + postgreSQLContainer.getPassword(),
+                    "files_directory=" + FILES_STORAGE_DIR_PATH
+            ).applyTo(configurableApplicationContext.getEnvironment());
+        }
     }
 }

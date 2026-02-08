@@ -19,10 +19,8 @@ public class CloudServiceRepository {
     }
 
     @Transactional
-    public long addUser(User user) {
+    public void addUser(User user) {
         db.persist(user);
-
-        return user.getId();
     }
 
     @Transactional

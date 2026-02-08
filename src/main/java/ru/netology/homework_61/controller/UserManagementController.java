@@ -21,18 +21,6 @@ public class UserManagementController {
         this.umService = umService;
     }
 
-    // It is convenient for testing to add new users via API because of passwords hashing.
-    @PostMapping("/registration")
-    public ResponseEntity<Object> registration(@RequestBody UserCredentials credentials) {
-        try {
-            umService.registerNewUser(credentials.getLogin(), credentials.getPassword());
-
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (UserAlreadyExistsException e) {
-            return new ResponseEntity<>(HttpStatus.ALREADY_REPORTED);
-        }
-    }
-
     @PostMapping("/login")
     public ResponseEntity<SuccessfulLoginResponse> login(@RequestBody UserCredentials credentials) {
         try {
