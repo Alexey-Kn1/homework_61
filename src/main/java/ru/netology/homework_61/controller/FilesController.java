@@ -13,46 +13,11 @@ import java.util.List;
 
 @Controller
 @RequestMapping
-public class CloudServiceController {
+public class FilesController {
     private final FilesService filesService;
-    private final UserManagementService umService;
 
-    public CloudServiceController(FilesService filesService, UserManagementService umService) {
+    public FilesController(FilesService filesService) {
         this.filesService = filesService;
-        this.umService = umService;
-    }
-
-    // It is convenient for testing to add new users via API because of passwords hashing.
-    @PostMapping("/registration")
-    public ResponseEntity<Object> registration(@RequestBody UserCredentials credentials) {
-        try {
-            umService.registerNewUser(credentials.getLogin(), credentials.getPassword());
-
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (UserAlreadyExistsException e) {
-            return new ResponseEntity<>(HttpStatus.ALREADY_REPORTED);
-        }
-    }
-
-    @PostMapping("/login")
-    public ResponseEntity<SuccessfulLoginResponse> login(@RequestBody UserCredentials credentials) {
-        try {
-            var token = umService.login(credentials.getLogin(), credentials.getPassword());
-
-            return new ResponseEntity<>(
-                    new SuccessfulLoginResponse(token),
-                    HttpStatus.OK
-            );
-        } catch (UserNotFoundException | PasswordMismatchException e) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
-    }
-
-    @PostMapping("/logout")
-    public ResponseEntity<Object> logout(@RequestHeader("auth-token") String authToken) {
-        umService.logout(authToken);
-
-        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @PostMapping("/file")
