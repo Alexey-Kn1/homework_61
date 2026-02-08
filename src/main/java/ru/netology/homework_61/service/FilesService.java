@@ -44,7 +44,7 @@ public class FilesService {
             throw new AuthorizationException();
         }
 
-        var existingFileDataFromDB = repository.getFileData(user.get().getId(), fileName);
+        var existingFileDataFromDB = repository.getFileData(user.get(), fileName);
 
         var fileExists = existingFileDataFromDB.isPresent();
 
@@ -53,7 +53,7 @@ public class FilesService {
 
             Files.delete(Path.of(filesDir, existingFileData.getLocalName()));
 
-            repository.deleteFileData(existingFileData.getUserId(), existingFileData.getName());
+            repository.deleteFileData(existingFileData.getUser(), existingFileData.getName());
         }
 
         String extension = null;
@@ -79,7 +79,7 @@ public class FilesService {
 
         try {
             repository.saveFileData(
-                    new FileData(user.get().getId(), fileName, localName, hash, file.getSize())
+                    new FileData(user.get(), fileName, localName, hash, file.getSize())
             );
         } catch (Throwable e) {
             filePath.toFile().delete();
@@ -95,13 +95,13 @@ public class FilesService {
             throw new AuthorizationException();
         }
 
-        var fileData = repository.getFileData(user.get().getId(), fileName);
+        var fileData = repository.getFileData(user.get(), fileName);
 
         if (fileData.isEmpty()) {
             throw new FileNotFoundException(fileName);
         }
 
-        if (repository.deleteFileData(user.get().getId(), fileName)) {
+        if (repository.deleteFileData(user.get(), fileName)) {
             Files.delete(Path.of(filesDir, fileData.get().getLocalName()));
         } else {
             // File was deleted by other request (erasing file in transaction is too slow).
@@ -116,7 +116,7 @@ public class FilesService {
             throw new AuthorizationException();
         }
 
-        var fileDataFromDb = repository.getFileData(user.get().getId(), fileName);
+        var fileDataFromDb = repository.getFileData(user.get(), fileName);
 
         if (fileDataFromDb.isEmpty()) {
             throw new FileNotFoundException(fileName);
@@ -143,13 +143,13 @@ public class FilesService {
 
         var user = userFromDb.get();
 
-        var fileDataFromDBByNewName = repository.getFileData(user.getId(), newFileName);
+        var fileDataFromDBByNewName = repository.getFileData(user, newFileName);
 
         if (fileDataFromDBByNewName.isPresent()) {
             throw new FileAlreadyExistsException(fileName);
         }
 
-        var fileDataFromDB = repository.getFileData(user.getId(), fileName);
+        var fileDataFromDB = repository.getFileData(user, fileName);
 
         if (fileDataFromDB.isEmpty()) {
             throw new FileNotFoundException(fileName);
@@ -169,7 +169,7 @@ public class FilesService {
             throw new AuthorizationException();
         }
 
-        return repository.listFilesByUser(user.get().getId(), limit);
+        return repository.listFilesByUser(user.get(), limit);
     }
 
     private Optional<User> findUserIdByAccessToken(String authToken) {

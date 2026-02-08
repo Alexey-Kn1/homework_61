@@ -1,26 +1,43 @@
 package ru.netology.homework_61.model;
 
+import jakarta.persistence.*;
+
 import java.util.Objects;
 
+@Entity
+@Table(name = "files_data")
 public class FileData {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
-    private long userId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Column(nullable = false)
     private String name;
+
+    @Column(name = "local_name", nullable = false)
     private String localName;
+
+    @Column(nullable = false)
     private String checksum;
+
+    @Column(nullable = false)
     private long size;
 
     public FileData() {
-        this(0, "", "", "", 0);
+        this(new User(), "", "", "", 0);
     }
 
-    public FileData(long userId, String name, String localName, String checksum, long size) {
-        this(0, userId, name, localName, checksum, size);
+    public FileData(User user, String name, String localName, String checksum, long size) {
+        this(0, user, name, localName, checksum, size);
     }
 
-    public FileData(long id, long userId, String name, String localName, String checksum, long size) {
+    public FileData(long id, User user, String name, String localName, String checksum, long size) {
         this.id = id;
-        this.userId = userId;
+        this.user = user;
         this.name = name;
         this.localName = localName;
         this.checksum = checksum;
@@ -35,12 +52,12 @@ public class FileData {
         this.id = id;
     }
 
-    public long getUserId() {
-        return userId;
+    public User getUser() {
+        return user;
     }
 
-    public void setUserId(long userId) {
-        this.userId = userId;
+    public void setUser(User user) {
+        this.user = user;
     }
 
     public String getName() {
@@ -77,13 +94,12 @@ public class FileData {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-        FileData fileData = (FileData) o;
-        return id == fileData.id && userId == fileData.userId && size == fileData.size && Objects.equals(name, fileData.name) && Objects.equals(localName, fileData.localName) && Objects.equals(checksum, fileData.checksum);
+        if (!(o instanceof FileData fileData)) return false;
+        return id == fileData.id && size == fileData.size && Objects.equals(user, fileData.user) && Objects.equals(name, fileData.name) && Objects.equals(localName, fileData.localName) && Objects.equals(checksum, fileData.checksum);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, userId, name, localName, checksum, size);
+        return Objects.hash(id, user, name, localName, checksum, size);
     }
 }

@@ -1,10 +1,20 @@
 package ru.netology.homework_61.model;
 
+import jakarta.persistence.*;
+
 import java.util.Objects;
 
+@Entity
+@Table(name = "users")
 public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
+
+    @Column(nullable = false)
     private String login;
+
+    @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
     public User() {

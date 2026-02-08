@@ -48,7 +48,7 @@ public class UserManagementService {
 
         var token = generateAccessToken(login, password);
 
-        repository.saveUserSession(token, user.get().getId());
+        repository.saveUserSession(token, user.get());
 
         return token;
     }
